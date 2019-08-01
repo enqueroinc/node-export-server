@@ -23,6 +23,11 @@ module.exports = {
   getJson: function (req, res) {
     var resultJson = getDashboardJson(req)
     res.send(resultJson)
+  },
+
+  getContributorsJson: function (req, res) {
+    var resultJson = getContributorsJson(req)
+    res.send(resultJson)
   }
 }
 var anomaly = {};
@@ -765,5 +770,87 @@ timelineColumnChart = (element) => {
   options.series = [...seriesOptions];
 
   return options
+
+  
+
+};
+
+getContributorsJson = (req) => {
+  var constributorJson = {
+    credits: {
+
+      enabled: false
+
+    },
+    chart: {
+        type: 'column',
+        width: 800
+    },
+    colors: CHART_COLORS,
+    title: {
+        text: 'Title of the Chart'
+    },
+    xAxis: {
+        categories: [],
+        labels: {
+          rotation:0
+        },
+        title: {
+          text: 'X axis'
+      }
+    },
+    yAxis: {
+        min: 0,
+        title: {
+            text: 'Y axis'
+        }
+    },
+    legend: {
+        reversed: true
+    },
+    plotOptions: {
+        series: {
+            stacking: 'normal',
+            dataLabels: {
+              enabled: true,
+              color: 'white',
+              style: {fontWeight: 'bolder'},
+              
+            format:'{point.label}',
+              inside: true,
+              rotation: 270
+          }
+                    
+        }
+    },
+    series: [{
+    }]
+}
+
+value = req.body.data;
+constributorJson.xAxis.categories=value.map(i => {
+
+  return i[req.body.metadata.xtitle];
+});
+
+stacks = req.body.metadata.stacks
+constributorJson.series=stacks.map(i => {
+
+  return {
+    name:i,
+    data: value.map(j => {
+      return {
+        y:j[i],
+        label:j[req.body.metadata.xbarLabelColumn]
+      };
+    })
+
+  };
+});
+constributorJson.yAxis.title.text=req.body.metadata.ytitle
+constributorJson.xAxis.title.text=req.body.metadata.xtitle
+constributorJson.title.text=req.body.metadata.chartTitle
+
+return constributorJson;
 
 };
