@@ -783,8 +783,8 @@ getContributorsJson = (req) => {
 
     },
     chart: {
-        type: 'column',
-        width: 800
+        type: 'bar',
+        width: 1000
     },
     colors: CHART_COLORS,
     title: {
@@ -813,12 +813,13 @@ getContributorsJson = (req) => {
             stacking: 'normal',
             dataLabels: {
               enabled: true,
-              color: 'white',
+              color: 'black',
               style: {fontWeight: 'bolder'},
               
             format:'{point.label}',
-              inside: true,
-              rotation: 270
+              inside: false,
+              crop:false,
+              overflow : 'allow'
           }
                     
         }
