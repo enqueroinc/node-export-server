@@ -1,7 +1,7 @@
 const moment = require('moment');
 const _ = require('lodash');
 const CHART_COLORS = [
-  "#223c61",
+  "#e20074",
   "#009688",
   "#e91e63",
   "#673ab7",
@@ -218,14 +218,13 @@ plotLine = (data, field, name) => {
       name: moment(rec[field], "YYYY-MM-DD").format("YYYY-MM-DD"),
 
       y: +rec[name].toFixed(2)
-
     };
 
 
 
     if (name !== "expected_upper_limit" && name !== "expected_lower_limit" && rec.anomaly_flag) {
 
-      obj.color = "red";
+      obj.color = "black";
 
       obj.marker = {
 
@@ -811,6 +810,7 @@ getContributorsJson = (req) => {
     plotOptions: {
         series: {
             stacking: 'normal',
+            color:'#e20074',
             dataLabels: {
               enabled: true,
               color: 'black',
