@@ -129,18 +129,18 @@ addSeries = (data, dataFunc, type, tooltp, name, color, opacity = 1, matured = f
 
           let result = value;
 
-          if (value > 1000000) {
-
+          if (value >= 1000000000000000000) {
+            result = Math.floor(value / 1000000000000000000) + "Qi";
+          } else if (value >= 1000000000000000) {
+            result = Math.floor(value / 1000000000000000) + "Qa";
+          } else if (value >= 1000000000000) {
+            result = Math.floor(value / 1000000000000) + "T";
+          } else if (value >= 1000000000) {
             result = Math.floor(value / 1000000000) + "B";
-
-          } else if (value > 1000) {
-
+          } else if (value >= 1000000) {
             result = Math.floor(value / 1000000) + "M";
-
-          } else if (value > 1000) {
-
-            result = Math.floor(value / 1000) + "k";
-
+          } else if (value >= 1000) {
+            result = Math.floor(value / 1000) + "K";
           }
 
           return result;
