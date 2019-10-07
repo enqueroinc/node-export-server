@@ -28,12 +28,19 @@ module.exports = {
   getContributorsJson: function (req, res) {
     var resultJson = getContributorsJson(req)
     res.send(resultJson)
+  },
+
+  getProfilingJson : function(req,res){
+    var resultJson = getProfilingJson(req.body)
+    res.send(resultJson)
   }
 }
 var anomaly = {};
+var timeFormat = "YYYY-MM-DD"
 getDashboardJson = (req) => {
   value = req.body.data
   anomaly = req.body.anomaly
+  timeFormat = anomaly.details.timeInfo && anomaly.details.timeInfo.type ? "YYYY-MM-DD HH:mm" : "YYYY-MM-DD"
   seriesOptions = [];
   val = value.map(i => {
 
@@ -213,9 +220,9 @@ plotLine = (data, field, name) => {
 
       ...rec,
 
-      x: moment(rec[field], "YYYY-MM-DD").valueOf(),
+      x: moment(rec[field], timeFormat).valueOf(),
 
-      name: moment(rec[field], "YYYY-MM-DD").format("YYYY-MM-DD"),
+      name: moment(rec[field], timeFormat).format(timeFormat),
 
       y: +rec[name].toFixed(2)
     };
@@ -274,9 +281,9 @@ plotArearange = (data, field) => {
 
       ...rec,
 
-      name: moment(rec[field], "YYYY-MM-DD").format("YYYY-MM-DD"),
+      name: moment(rec[field], timeFormat).format(timeFormat),
 
-      x: moment(rec[field], "YYYY-MM-DD").valueOf(),
+      x: moment(rec[field], timeFormat).valueOf(),
 
       high: +rec.expected_upper_limit.toFixed(2),
 
@@ -773,6 +780,344 @@ timelineColumnChart = (element) => {
   
 
 };
+function profilingChartOptions(metric, aggValue) {
+
+  let aggregateBy;
+
+  let aggregateList = [];
+
+  let aggregateValue;
+
+  if (metric.hits.length != 0) {
+
+    aggregateBy = metric.hits[0].sinkArgs.aggregateBy;
+
+    aggregateList = metric.hits[0].sinkArgs.aggregateList;
+
+    aggregateValue =
+
+      aggValue || (aggregateList && aggregateList.length > 0 ? aggregateList[0] : undefined);
+
+  }
+
+  const chart = {
+
+    chart: {
+
+      height: 1000
+
+    },
+
+    credits: {
+
+      enabled: false
+
+    },
+
+    title: {
+
+      text: ""
+
+    },
+
+    subtitle: {
+
+      enabled: false
+
+    },
+
+    scrollbar: {
+
+      enabled: false
+
+    },
+
+    legend: {
+
+      enabled: true,
+
+      backgroundColor: "#FFFFFF",
+
+      verticalAlign: "bottom"
+
+    },
+
+
+
+    xAxis: {
+
+      categories: [],
+
+      crosshair: true
+
+    },
+
+    navigator: {
+
+    },
+
+    yAxis: [
+
+      {
+
+        type: "linear",
+
+        title: {
+
+          text: "Value",
+
+          enabled: true
+
+        },
+
+        offset: 30
+
+      },
+
+      {
+
+        // Secondary yAxis
+
+        title: {
+
+          text: "Deviation & Ratio"
+
+        },
+
+        opposite: false
+
+      }
+
+    ],
+
+    plotOptions: {
+
+      column: {
+
+        pointPadding: 0.2,
+
+        borderWidth: 0
+
+      }
+
+    },
+
+    rangeSelector: {
+
+      buttons: [
+
+        {
+
+          type: "day",
+
+          count: 1,
+
+          text: "1D"
+
+        },
+
+        {
+
+          type: "week",
+
+          count: 1,
+
+          text: "1W"
+
+        },
+
+        {
+
+          type: "month",
+
+          count: 1,
+
+          text: "1M"
+
+        },
+
+        {
+
+          type: "month",
+
+          count: 3,
+
+          text: "3M"
+
+        },
+
+        {
+
+          type: "ytd",
+
+          text: "YTD"
+
+        },
+
+        {
+
+          type: "year",
+
+          count: 1,
+
+          text: "1y"
+
+        },
+
+        {
+
+          type: "all",
+
+          count: 1,
+
+          text: "All"
+
+        }
+
+      ],
+
+      selected: 1,
+
+      inputEnabled: false
+
+    },
+
+    series: [],
+
+    exporting: {
+
+      enabled: false
+
+    }
+
+  };
+
+
+
+  const seriesMap = {};
+
+  if (aggregateValue) {
+
+    metric.hits.forEach(hit => {
+
+      hit.metric_detail.forEach(val => {
+
+        if (!seriesMap.hasOwnProperty(val.rule_name)) {
+
+          seriesMap[val.rule_name] = {
+
+            dataGrouping: {
+
+              enabled: false
+
+            },
+
+            type: "column",
+
+            yAxis: 0,
+
+            name: val.rule_name,
+
+            data: []
+
+          };
+
+        }
+
+        const value = val.aggregators.filter(i => i.agg_value == aggregateValue)[0];
+
+        const metrics = ["deviation", "devition_dow", "ratio"];
+
+        metrics.forEach(key => {
+
+          if (value[key]) {
+
+            const modifiedKey = val.rule_name + "_" + key;
+
+            if (!seriesMap.hasOwnProperty(modifiedKey)) {
+
+              seriesMap[modifiedKey] = {
+
+                dataGrouping: {
+
+                  enabled: false
+
+                },
+
+                type: "spline",
+
+                yAxis: 1,
+
+                name: modifiedKey,
+
+                data: []
+
+              };
+
+            }
+
+            seriesMap[modifiedKey].data.push([hit.tmst, value[key]]);
+
+          }
+
+        });
+
+        seriesMap[val.rule_name].data.push([hit.tmst, value.rule_value]);
+
+      });
+
+    });
+
+  } else {
+
+    metric.hits.forEach(hit => {
+
+      Object.keys(hit.value).forEach(key => {
+
+       if (!seriesMap.hasOwnProperty(key)) {
+
+          seriesMap[key] = {
+
+            dataGrouping: {
+
+              enabled: false
+
+            },
+
+            type: /(ratio|deviation|deviation_dow)$/.test(key) ? "spline" : "column",
+
+            yAxis: /(ratio|deviation|deviation_dow)$/.test(key) ? 1 : 0,
+
+            name: key,
+
+            data: []
+
+          };
+
+        }
+
+        seriesMap[key].data.push([hit.tmst, +hit.value[key]]);
+
+      });
+
+    });
+
+  }
+
+
+
+  chart.series = Object.keys(seriesMap).map(key => seriesMap[key]);
+
+
+
+  return chart
+
+}
+
+getProfilingJson = (req) =>{
+  var res = profilingChartOptions(req.metric,req.aggValue);
+  return res;
+}
 
 getContributorsJson = (req) => {
   var constributorJson = {
