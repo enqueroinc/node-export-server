@@ -40,7 +40,7 @@ var timeFormat = "YYYY-MM-DD"
 getDashboardJson = (req) => {
   value = req.body.data
   anomaly = req.body.anomaly
-  timeFormat = anomaly.details.timeInfo && anomaly.details.timeInfo.type ? "YYYY-MM-DD HH:mm" : "YYYY-MM-DD"
+  timeFormat = anomaly.details.dateFormat;
   seriesOptions = [];
   val = value.map(i => {
 
@@ -220,7 +220,7 @@ plotLine = (data, field, name) => {
 
       ...rec,
 
-      x: moment(rec[field], timeFormat).valueOf(),
+      x: moment.utc(rec[field], timeFormat).valueOf(),
 
       name: moment(rec[field], timeFormat).format(timeFormat),
 
@@ -283,7 +283,7 @@ plotArearange = (data, field) => {
 
       name: moment(rec[field], timeFormat).format(timeFormat),
 
-      x: moment(rec[field], timeFormat).valueOf(),
+      x: moment.utc(rec[field], timeFormat).valueOf(),
 
       high: +rec.expected_upper_limit.toFixed(2),
 
