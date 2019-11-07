@@ -37,10 +37,14 @@ module.exports = {
 }
 var anomaly = {};
 var timeFormat = "YYYY-MM-DD"
+
 getDashboardJson = (req) => {
   value = req.body.data
   anomaly = req.body.anomaly
-  timeFormat = anomaly.details.dateFormat;
+  timeFormat =
+  anomaly.details.timeInfo && this.anomaly.details.timeInfo.type
+    ? "YYYY-MM-DD HH:mm"
+    : "YYYY-MM-DD";
   seriesOptions = [];
   val = value.map(i => {
 
@@ -323,7 +327,6 @@ getAnomalyDetailByLevel = (req, score) => {
 
 };
 
-
 getAnomalyAggList = (anomaly, index) => {
 
   if (!isNullOrUndefined(index) && checkForAnomaly(anomaly, index)) {
@@ -577,7 +580,6 @@ timelineColumnChart = (element) => {
 
       const obj = {
 
-        // Primary yAxis
 
         title: {
 
@@ -780,31 +782,16 @@ timelineColumnChart = (element) => {
   
 
 };
-function profilingChartOptions(metric, aggValue) {
 
-  let aggregateBy;
+getChartOptions = (y1AxisName, y2AxisName) => {
 
-  let aggregateList = [];
+  const chartOpts = {
 
-  let aggregateValue;
+    colors: CHART_COLORS,
 
-  if (metric.hits.length != 0) {
+    title: {
 
-    aggregateBy = metric.hits[0].sinkArgs.aggregateBy;
-
-    aggregateList = metric.hits[0].sinkArgs.aggregateList;
-
-    aggregateValue =
-
-      aggValue || (aggregateList && aggregateList.length > 0 ? aggregateList[0] : undefined);
-
-  }
-
-  const chart = {
-
-    chart: {
-
-      height: 1000
+      text: ""
 
     },
 
@@ -814,15 +801,11 @@ function profilingChartOptions(metric, aggValue) {
 
     },
 
-    title: {
-
-      text: ""
-
-    },
-
     subtitle: {
 
-      enabled: false
+      text: "",
+
+      align: "left"
 
     },
 
@@ -838,7 +821,9 @@ function profilingChartOptions(metric, aggValue) {
 
       backgroundColor: "#FFFFFF",
 
-      verticalAlign: "bottom"
+      verticalAlign: "bottom",
+
+      layout: "horizontal"
 
     },
 
@@ -852,21 +837,30 @@ function profilingChartOptions(metric, aggValue) {
 
     },
 
-    navigator: {
 
-    },
 
     yAxis: [
 
       {
 
-        type: "linear",
 
         title: {
 
-          text: "Value",
+          text: y1AxisName,
 
-          enabled: true
+          style: {
+
+            color: CHART_COLORS[1]
+
+          },
+
+          margin: 25
+
+        },
+
+        labels: {
+
+          x: 20
 
         },
 
@@ -876,11 +870,10 @@ function profilingChartOptions(metric, aggValue) {
 
       {
 
-        // Secondary yAxis
 
         title: {
 
-          text: "Deviation & Ratio"
+          text: y2AxisName
 
         },
 
@@ -890,6 +883,26 @@ function profilingChartOptions(metric, aggValue) {
 
     ],
 
+    tooltip: {
+
+      headerFormat: '<span style="font-size:10px">{point.key}</span><table>',
+
+      pointFormat:
+
+        '<tr><td style="color:{series.color};padding:0">{series.name}: </td>' +
+
+        '<td style="padding:0"><b>{point.y}</b></td></tr>',
+
+      footerFormat: "</table>",
+
+     shared: true,
+
+      useHTML: true,
+
+      split: false
+
+    },
+
     plotOptions: {
 
       column: {
@@ -897,6 +910,12 @@ function profilingChartOptions(metric, aggValue) {
         pointPadding: 0.2,
 
         borderWidth: 0
+
+      },
+
+      series: {
+
+        showInNavigator: true
 
       }
 
@@ -976,7 +995,7 @@ function profilingChartOptions(metric, aggValue) {
 
       ],
 
-      selected: 1,
+      selected: 6,
 
       inputEnabled: false
 
@@ -992,89 +1011,75 @@ function profilingChartOptions(metric, aggValue) {
 
   };
 
+  return chartOpts;
 
+};
+
+profilingChartOption = (metric ) => {
+
+  const chart = getChartOptions("Value", "Deviation & Ratio");
+
+  chart.rangeSelector.buttons.splice(1, 0, {
+
+    type: "day",
+
+    count: 2,
+
+    text: "2D"
+
+  });
+
+  chart.rangeSelector.selected = 7;
+
+  if (metric.hits.length >= 2) {
+
+    let firstHit = moment(metric.hits[0].tmst);
+
+    let secondHit = moment(metric.hits[1].tmst);
+
+    let duration = moment.duration(secondHit.diff(firstHit));
+
+    let hours = duration.asHours();
+
+    if (hours <= 24) {
+
+      chart.rangeSelector.selected = 1;
+
+    }
+
+  }
+
+  formatter(chart, metric);
 
   const seriesMap = {};
 
-  if (aggregateValue) {
+  let aggregateBy;
 
-    metric.hits.forEach(hit => {
 
-      hit.metric_detail.forEach(val => {
+  if (metric.args.length !== 0) {
 
-        if (!seriesMap.hasOwnProperty(val.rule_name)) {
+    aggregateBy = metric.args[0].aggregateBy;
 
-          seriesMap[val.rule_name] = {
+  }
 
-            dataGrouping: {
 
-              enabled: false
+  metric.hits.forEach(hit => {
 
-            },
+    if (hit.value) {
 
-            type: "column",
 
-            yAxis: 0,
+      const graphMetrics = Object.keys(hit.value)
 
-            name: val.rule_name,
+        .filter(key => !isNullOrUndefined(hit.value[key]) && hit.value[key] != '-Infinity' && hit.value[key] != 'Infinity')
 
-            data: []
+        .sort();
 
-          };
 
-        }
+      graphMetrics.forEach(key => {
 
-        const value = val.aggregators.filter(i => i.agg_value == aggregateValue)[0];
+        const isDeviationRule = /(ratio|deviation|deviation_dow)$/.test(key);
 
-        const metrics = ["deviation", "devition_dow", "ratio"];
-
-        metrics.forEach(key => {
-
-          if (value[key]) {
-
-            const modifiedKey = val.rule_name + "_" + key;
-
-            if (!seriesMap.hasOwnProperty(modifiedKey)) {
-
-              seriesMap[modifiedKey] = {
-
-                dataGrouping: {
-
-                  enabled: false
-
-                },
-
-                type: "spline",
-
-                yAxis: 1,
-
-                name: modifiedKey,
-
-                data: []
-
-              };
-
-            }
-
-            seriesMap[modifiedKey].data.push([hit.tmst, value[key]]);
-
-          }
-
-        });
-
-        seriesMap[val.rule_name].data.push([hit.tmst, value.rule_value]);
-
-      });
-
-    });
-
-  } else {
-
-    metric.hits.forEach(hit => {
-
-      Object.keys(hit.value).forEach(key => {
-
-       if (!seriesMap.hasOwnProperty(key)) {
+        if (!seriesMap.hasOwnProperty(key)) {
 
           seriesMap[key] = {
 
@@ -1084,9 +1089,9 @@ function profilingChartOptions(metric, aggValue) {
 
             },
 
-            type: /(ratio|deviation|deviation_dow)$/.test(key) ? "spline" : "column",
+            type: isDeviationRule ? "spline" : "column",
 
-            yAxis: /(ratio|deviation|deviation_dow)$/.test(key) ? 1 : 0,
+            yAxis: isDeviationRule ? 1 : 0,
 
             name: key,
 
@@ -1094,30 +1099,277 @@ function profilingChartOptions(metric, aggValue) {
 
           };
 
+          if (isDeviationRule) {
+
+            seriesMap[key]["zIndex"] = 10;
+
+            seriesMap[key]["tooltip"] = {
+
+              valueSuffix: " %"
+
+            };
+
+          }
+
         }
 
-        seriesMap[key].data.push([hit.tmst, +hit.value[key]]);
+        if (hit.value.hasOwnProperty(key)) {
+
+          seriesMap[key].data.push({
+
+            x: hit.tmst,
+
+            y: +parseFloat(hit.value[key]).toFixed(2),
+
+            sortBy: getSortBy(hit.value)
+
+          });
+
+        }
 
       });
 
-    });
+    }
 
-  }
+  });
 
+  chart.series = Object.keys(seriesMap)
 
+    .filter(key => seriesMap[key].data.length)
 
-  chart.series = Object.keys(seriesMap).map(key => seriesMap[key]);
+    .map(key => seriesMap[key]);
 
 
 
   return chart
 
+};
+
+getSortBy = (agg)=> {
+
+  const keys = Object.keys(agg);
+
+  let sortBy;
+
+  const metrics = ["deviation_dow", "deviation", "ratio"];
+
+  metrics.some(i => {
+
+    if (keys.some(j => j.endsWith(i))) {
+
+      sortBy = i;
+
+      return true;
+
+    } else {
+
+      return false;
+
+    }
+
+  });
+
+  return sortBy;
+
+}
+
+formatter = (chart, metric) => {
+
+  function formatFn() {
+
+    const minute = moment.utc(this.value).minutes();
+
+    const hour = moment.utc(this.value).hour();
+
+    let format;
+
+    if (!hour && !minute) {
+
+      format = " DD MMM";
+
+    } else {
+
+      if (this.isFirst && this.isLast) {
+
+        format = " DD MMM HH:mm";
+
+      } else {
+
+        format = " HH:mm";
+
+      }
+
+    }
+
+    return moment(this.value)
+
+      .utc()
+
+      .format(format);
+
+  }
+
+  chart.xAxis = {
+
+    categories: [],
+
+    crosshair: true,
+
+    labels: {
+
+      formatter: formatFn
+
+    }
+
+  };
+
+  chart.navigator = {
+
+    xAxis: {
+
+      labels: {
+
+        formatter: formatFn
+
+      }
+
+    }
+
+  };
+
+}
+
+isNullOrUndefined = (val) =>{
+  return (val === undefined || val === null)
 }
 
 getProfilingJson = (req) =>{
-  var res = profilingChartOptions(req.metric,req.aggValue);
+
+
+
+  var res = profilingResponse(req.metric,req.aggValue);
   return res;
 }
+
+profilingResponse = (data, aggregatorKey) => {
+
+  const buckets = data.aggregations;
+
+  const req =  {
+
+      name: _.get(buckets, ["asMap","tophit", "hits", "hits", "0", "source", "name"], "NA"),
+
+      hits: !isNullOrUndefined(aggregatorKey)
+
+        ? buckets.asMap.agg_rule_values.buckets.map(hits => {
+
+            const tmp = {
+
+              tmst: hits.key,
+
+              value: hits.aggregations.asMap.metric_agg.aggregations.asMap.rule_names.buckets.map(hit => {
+               const temp =  _.get(
+
+                  hit,
+
+                  [
+                    "aggregations",
+                    "asMap",
+                    "agg_list",
+                    "aggregations",
+                    "asMap",
+
+                    "aggregator_key_list",
+
+                    "buckets",
+                    
+                    "0",
+                    "aggregations",
+                    "asMap",
+
+                    "rule_value",
+
+                    "buckets",
+                    
+                    "0",
+
+                    "key"
+
+                  ],
+
+                  0
+
+                )
+
+                const temp1 = {
+
+                  [hit.key]: temp,
+
+                  ...[
+
+                    "deviation",
+
+                   "deviation_dow",
+
+                    "ratio",
+
+                    "average",
+
+                    "dow_average",
+
+                    "ratio_average"
+
+                  ].reduce(function(acc, cur) {
+
+                    acc[hit.key + "_" + cur] = _.get(
+
+                      hit,
+
+                      [
+                        "aggregations",
+                      "asMap",
+                        "agg_list",
+                         "aggregations",
+
+                      "asMap",
+                       "aggregator_key_list",
+                        "buckets",
+                        "0",
+                         "aggregations",
+
+                      "asMap",
+                        cur,
+                         "value"],
+
+                      undefined
+
+                    );
+
+                    return acc;
+
+                  }, {})
+
+                };
+                return temp1
+
+              })[0]
+
+            };
+
+            return tmp
+
+          })
+
+        : buckets.basic_rule_values.hits.hits.map(hit => hit.source),
+
+      args: buckets.asMap.tophit.hits.hits.map(hit => hit.source.sinkArgs)
+
+    }
+
+
+  return profilingChartOption(req)
+
+};
 
 getContributorsJson = (req) => {
   var constributorJson = {
@@ -1200,3 +1452,4 @@ constributorJson.title.text=req.body.metadata.chartTitle
 return constributorJson;
 
 };
+
