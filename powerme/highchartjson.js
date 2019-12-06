@@ -41,10 +41,9 @@ var timeFormat = "YYYY-MM-DD"
 getDashboardJson = (req) => {
   value = req.body.data
   anomaly = req.body.anomaly
-  timeFormat =
-  anomaly.details.timeInfo && this.anomaly.details.timeInfo.type
-    ? "YYYY-MM-DD HH:mm"
-    : "YYYY-MM-DD";
+  timeFormat = anomaly.details.dateFormat ?  anomaly.details.dateFormat : timeFormat;
+  console.log("Time format :: ", timeFormat)
+  
   seriesOptions = [];
   val = value.map(i => {
 
@@ -425,6 +424,7 @@ drawAnomalygraph = val => {
 
   return drawCharts({
     desc: anomaly.details.medianColumn,
+    timeFormat : timeFormat,
     yAxis: [{
       axis: 0
     }]
@@ -748,6 +748,19 @@ timelineColumnChart = (element) => {
     series: []
 
   };
+
+if(element.timeFormat && element.timeFormat === 'YYYY-MM-DD HH:mm') {
+  options.rangeSelector.buttons.splice(1, 0, {
+
+    type: "day",
+  
+    count: 2,
+  
+    text: "2D"
+  
+  });
+  options.rangeSelector.selected = 1;
+}
 
   options.legend = {
 
