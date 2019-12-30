@@ -1075,6 +1075,7 @@ profilingChartOption = (metric ) => {
 
   }
 
+  console.log("")
 
   metric.hits.forEach(hit => {
 
@@ -1267,11 +1268,12 @@ getProfilingJson = (req) =>{
 profilingResponse = (data, aggregatorKey) => {
 
   const buckets = data.aggregations;
+ 
 
   const req =  {
 
       name: _.get(buckets, ["asMap","tophit", "hits", "hits", "0", "source", "name"], "NA"),
-
+      
       hits: !isNullOrUndefined(aggregatorKey)
 
         ? buckets.asMap.agg_rule_values.buckets.map(hits => {
@@ -1373,7 +1375,7 @@ profilingResponse = (data, aggregatorKey) => {
 
           })
 
-        : buckets.basic_rule_values.hits.hits.map(hit => hit.source),
+        : buckets.asMap.basic_rule_values.hits.hits.map(hit => hit.source),
 
       args: buckets.asMap.tophit.hits.hits.map(hit => hit.source.sinkArgs)
 
