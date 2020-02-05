@@ -33,10 +33,180 @@ module.exports = {
   getProfilingJson : function(req,res){
     var resultJson = getProfilingJson(req.body)
     res.send(resultJson)
+  },
+  
+  getDistinctnessJson : function(req,res){
+    var resultJson = getDistinctnessJson(req.body)
+    res.send(resultJson)
   }
 }
 var anomaly = {};
 var timeFormat = "YYYY-MM-DD"
+
+getDistinctnessJson = (data) => { 
+ 
+  const buckets = data.metric.aggregations.asMap;
+  var aggregatorKey =  data.aggValue;
+  var esResponse = [
+    {
+      name: _.get(buckets, ["tophit", "hits", "hits", "0", "source", "name"], "NA"),
+      hits: !isNullOrUndefined(aggregatorKey)
+        ? buckets.agg_rule_values.buckets.map(hits => {
+            return {
+              tmst: hits.key,
+              value: hits.aggregations.asMap.metric_agg.aggregations.asMap.rule_names.buckets
+                .map(hit => {
+                  return {
+                    [hit.key]: _.get(
+                      hit,
+                      [
+                        "aggregations",
+                          "asMap",
+                        "agg_list",
+                        "aggregations",
+                          "asMap",
+                        "aggregator_key_list",
+                        "buckets",
+                        "0",
+                       
+                        "buckets",
+                        "0",
+                        "key"
+                      ],
+                      0
+                    ),
+                    ...["total","distinct"].reduce(function(acc, cur) {
+                      acc[ hit.key + "_" + cur] = _.get(
+                        hit,
+                        ["aggregations",
+                        "asMap","agg_list","aggregations",
+                        "asMap", "aggregator_key_list", "buckets", "0","aggregations",
+                        "asMap", cur, "value"],
+                        undefined
+                      );
+                      return acc;
+                    }, {})
+                  };
+                })
+                .reduce((result, current) => {
+                  return Object.assign(result, removeNullValues(current));
+                }, {})
+            };
+          })
+        : buckets.basic_rule_values.hits.hits.map(hit => hit.source),
+      args: buckets.tophit.hits.hits.map(hit => hit.source.sinkArgs)
+    }
+  ];
+  return distinctnessChartOption(esResponse[0]);
+};
+ 
+ distinctnessChartOption = (metric) => {
+  const chart = getChartOptions("Duplicate Count", "Distinct & Total Count");
+  formatter(chart, metric);
+ 
+  if (metric.args && metric.args.length !== 0) {
+    aggregateBy =
+      metric.args[0].aggregatorAlias && metric.args[0].aggregatorAlias.trim().length > 0
+        ? metric.args[0].aggregatorAlias.trim()
+        : metric.args[0].aggregateBy;
+  }
+  if (metric.hits.length) {
+    const val = processRequest(metric.hits[0].value, "distinctness");
+    val.forEach(i => {
+      const name = getTitle(i);
+      chart.series.push({
+        dataGrouping: {
+          enabled: false
+        },
+        type: "column",
+        name: `${name} total`,
+        yAxis: 1,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: hit.value[i + "_dup"].total
+              ? hit.value[i + "_dup"].total
+              : hit.value[i + "_dup_total"]
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} distinct`,
+        yAxis: 1,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: hit.value[i + "_dup"].distinct
+              ? hit.value[i + "_dup"].distinct
+              : hit.value[i + "_dup_distinct"]
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} duplicate`,
+        yAxis: 0,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y:
+              (hit.value[i + "_dup"].total
+                ? hit.value[i + "_dup"].total
+                : hit.value[i + "_dup_total"]) -
+              (hit.value[i + "_dup"].distinct
+                ? hit.value[i + "_dup"].distinct
+                : hit.value[i + "_dup_distinct"])
+          };
+        })
+      });
+    });
+  }
+  return chart;
+}
+getTitle = function(name) {
+  const temp = name.split("__");
+  if (temp.length > 1) {
+    temp[1] = temp[1].replace(/_/g, " ");
+    return temp.join(" ");
+  } else {
+    return name.replace(/_/g, " ");
+  }
+};
+ 
+ processRequest = function(item, type) {
+  switch (type) {
+    case "validity": {
+      return Object.keys(item)
+        .filter(i => {
+          return i.endsWith("_total_count");
+        })
+        .map(i => i.replace("_total_count", ""));
+    }
+    case "completeness": {
+      return Object.keys(item)
+        .filter(i => {
+          return i.endsWith("_null_check");
+        })
+        .map(i => i.replace("_null_check", ""));
+    }
+    case "distinctness": {
+      return Object.keys(item)
+        .filter(i => {
+          return i.endsWith("_dup");
+        })
+        .map(i => i.replace("_dup", ""));
+    }
+  }
+}
+removeNullValues = function(current) {
+  for (let val in current) {
+    if (current[val] == null) {
+      delete current[val];
+    }
+  }
+  return current;
+}
 
 getDashboardJson = (req) => {
   value = req.body.data
