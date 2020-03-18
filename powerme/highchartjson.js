@@ -30,12 +30,12 @@ module.exports = {
     res.send(resultJson)
   },
 
-  getProfilingJson : function(req,res){
-    var resultJson = getProfilingJson(req.body)
+  getProfilingJson: function (req, res) {
+    var resultJson = profilingChartOption(req.body);
     res.send(resultJson)
   },
-  
-  getDistinctnessJson : function(req,res){
+
+  getDistinctnessJson: function (req, res) {
     var resultJson = getDistinctnessJson(req.body)
     res.send(resultJson)
   }
@@ -43,67 +43,67 @@ module.exports = {
 var anomaly = {};
 var timeFormat = "YYYY-MM-DD"
 
-getDistinctnessJson = (data) => { 
- 
+getDistinctnessJson = (data) => {
+
   const buckets = data.metric.aggregations.asMap;
-  var aggregatorKey =  data.aggValue;
+  var aggregatorKey = data.aggValue;
   var esResponse = [
     {
       name: _.get(buckets, ["tophit", "hits", "hits", "0", "source", "name"], "NA"),
       hits: !isNullOrUndefined(aggregatorKey)
         ? buckets.agg_rule_values.buckets.map(hits => {
-            return {
-              tmst: hits.key,
-              value: hits.aggregations.asMap.metric_agg.aggregations.asMap.rule_names.buckets
-                .map(hit => {
-                  return {
-                    [hit.key]: _.get(
+          return {
+            tmst: hits.key,
+            value: hits.aggregations.asMap.metric_agg.aggregations.asMap.rule_names.buckets
+              .map(hit => {
+                return {
+                  [hit.key]: _.get(
+                    hit,
+                    [
+                      "aggregations",
+                      "asMap",
+                      "agg_list",
+                      "aggregations",
+                      "asMap",
+                      "aggregator_key_list",
+                      "buckets",
+                      "0",
+
+                      "buckets",
+                      "0",
+                      "key"
+                    ],
+                    0
+                  ),
+                  ...["total", "distinct"].reduce(function (acc, cur) {
+                    acc[hit.key + "_" + cur] = _.get(
                       hit,
-                      [
-                        "aggregations",
-                          "asMap",
-                        "agg_list",
-                        "aggregations",
-                          "asMap",
-                        "aggregator_key_list",
-                        "buckets",
-                        "0",
-                       
-                        "buckets",
-                        "0",
-                        "key"
-                      ],
-                      0
-                    ),
-                    ...["total","distinct"].reduce(function(acc, cur) {
-                      acc[ hit.key + "_" + cur] = _.get(
-                        hit,
-                        ["aggregations",
-                        "asMap","agg_list","aggregations",
-                        "asMap", "aggregator_key_list", "buckets", "0","aggregations",
+                      ["aggregations",
+                        "asMap", "agg_list", "aggregations",
+                        "asMap", "aggregator_key_list", "buckets", "0", "aggregations",
                         "asMap", cur, "value"],
-                        undefined
-                      );
-                      return acc;
-                    }, {})
-                  };
-                })
-                .reduce((result, current) => {
-                  return Object.assign(result, removeNullValues(current));
-                }, {})
-            };
-          })
+                      undefined
+                    );
+                    return acc;
+                  }, {})
+                };
+              })
+              .reduce((result, current) => {
+                return Object.assign(result, removeNullValues(current));
+              }, {})
+          };
+        })
         : buckets.basic_rule_values.hits.hits.map(hit => hit.source),
       args: buckets.tophit.hits.hits.map(hit => hit.source.sinkArgs)
     }
   ];
   return distinctnessChartOption(esResponse[0]);
 };
- 
- distinctnessChartOption = (metric) => {
+
+distinctnessChartOption = (metric) => {
   const chart = getChartOptions("Duplicate Count", "Distinct & Total Count");
   formatter(chart, metric);
- 
+
   if (metric.args && metric.args.length !== 0) {
     aggregateBy =
       metric.args[0].aggregatorAlias && metric.args[0].aggregatorAlias.trim().length > 0
@@ -164,7 +164,7 @@ getDistinctnessJson = (data) => {
   }
   return chart;
 }
-getTitle = function(name) {
+getTitle = function (name) {
   const temp = name.split("__");
   if (temp.length > 1) {
     temp[1] = temp[1].replace(/_/g, " ");
@@ -173,8 +173,8 @@ getTitle = function(name) {
     return name.replace(/_/g, " ");
   }
 };
- 
- processRequest = function(item, type) {
+
+processRequest = function (item, type) {
   switch (type) {
     case "validity": {
       return Object.keys(item)
@@ -199,7 +199,7 @@ getTitle = function(name) {
     }
   }
 }
-removeNullValues = function(current) {
+removeNullValues = function (current) {
   for (let val in current) {
     if (current[val] == null) {
       delete current[val];
@@ -211,9 +211,9 @@ removeNullValues = function(current) {
 getDashboardJson = (req) => {
   value = req.body.data
   anomaly = req.body.anomaly
-  timeFormat = anomaly.details.dateFormat ?  anomaly.details.dateFormat : timeFormat;
+  timeFormat = anomaly.details.dateFormat ? anomaly.details.dateFormat : timeFormat;
   console.log("Time format :: ", timeFormat)
-  
+
   seriesOptions = [];
   val = value.map(i => {
 
@@ -594,7 +594,7 @@ drawAnomalygraph = val => {
 
   return drawCharts({
     desc: anomaly.details.medianColumn,
-    timeFormat : timeFormat,
+    timeFormat: timeFormat,
     yAxis: [{
       axis: 0
     }]
@@ -919,18 +919,18 @@ timelineColumnChart = (element) => {
 
   };
 
-if(element.timeFormat && element.timeFormat === 'YYYY-MM-DD HH:mm') {
-  options.rangeSelector.buttons.splice(1, 0, {
+  if (element.timeFormat && element.timeFormat === 'YYYY-MM-DD HH:mm') {
+    options.rangeSelector.buttons.splice(1, 0, {
 
-    type: "day",
-  
-    count: 2,
-  
-    text: "2D"
-  
-  });
-  options.rangeSelector.selected = 1;
-}
+      type: "day",
+
+      count: 2,
+
+      text: "2D"
+
+    });
+    options.rangeSelector.selected = 1;
+  }
 
   options.legend = {
 
@@ -962,7 +962,7 @@ if(element.timeFormat && element.timeFormat === 'YYYY-MM-DD HH:mm') {
 
   return options
 
-  
+
 
 };
 
@@ -1078,7 +1078,7 @@ getChartOptions = (y1AxisName, y2AxisName) => {
 
       footerFormat: "</table>",
 
-     shared: true,
+      shared: true,
 
       useHTML: true,
 
@@ -1198,7 +1198,18 @@ getChartOptions = (y1AxisName, y2AxisName) => {
 
 };
 
-profilingChartOption = (metric ) => {
+profilingChartOption = (response) => {
+  response = response.metric;
+
+  const metric = {
+
+    hits: response,
+
+    name: _.get(response, ["0", "sinkArgs", "jobName"], "NA"),
+
+    args: response.map(i => i.sinkArgs)
+
+  };
 
   const chart = getChartOptions("Value", "Deviation & Ratio");
 
@@ -1236,28 +1247,15 @@ profilingChartOption = (metric ) => {
 
   const seriesMap = {};
 
-  let aggregateBy;
-
-
-  if (metric.args.length !== 0) {
-
-    aggregateBy = metric.args[0].aggregateBy;
-
-  }
-
-  console.log("")
-
   metric.hits.forEach(hit => {
 
     if (hit.value) {
 
-
       const graphMetrics = Object.keys(hit.value)
 
-        .filter(key => !isNullOrUndefined(hit.value[key]) && hit.value[key] != '-Infinity' && hit.value[key] != 'Infinity')
+        .filter(key => !isNullOrUndefined(hit.value[key]))
 
         .sort();
-
 
       graphMetrics.forEach(key => {
 
@@ -1303,9 +1301,7 @@ profilingChartOption = (metric ) => {
 
             x: hit.tmst,
 
-            y: +parseFloat(hit.value[key]).toFixed(2),
-
-            sortBy: getSortBy(hit.value)
+            y: +parseFloat(hit.value[key]).toFixed(2)
 
           });
 
@@ -1325,11 +1321,11 @@ profilingChartOption = (metric ) => {
 
 
 
-  return chart
+  return chart;
 
 };
 
-getSortBy = (agg)=> {
+getSortBy = (agg) => {
 
   const keys = Object.keys(agg);
 
@@ -1423,138 +1419,9 @@ formatter = (chart, metric) => {
 
 }
 
-isNullOrUndefined = (val) =>{
+isNullOrUndefined = (val) => {
   return (val === undefined || val === null)
 }
-
-getProfilingJson = (req) =>{
-
-
-
-  var res = profilingResponse(req.metric,req.aggValue);
-  return res;
-}
-
-profilingResponse = (data, aggregatorKey) => {
-
-  const buckets = data.aggregations;
- 
-
-  const req =  {
-
-      name: _.get(buckets, ["asMap","tophit", "hits", "hits", "0", "source", "name"], "NA"),
-      
-      hits: !isNullOrUndefined(aggregatorKey)
-
-        ? buckets.asMap.agg_rule_values.buckets.map(hits => {
-
-            const tmp = {
-
-              tmst: hits.key,
-
-              value: hits.aggregations.asMap.metric_agg.aggregations.asMap.rule_names.buckets.map(hit => {
-               const temp =  _.get(
-
-                  hit,
-
-                  [
-                    "aggregations",
-                    "asMap",
-                    "agg_list",
-                    "aggregations",
-                    "asMap",
-
-                    "aggregator_key_list",
-
-                    "buckets",
-                    
-                    "0",
-                    "aggregations",
-                    "asMap",
-
-                    "rule_value",
-
-                    "buckets",
-                    
-                    "0",
-
-                    "key"
-
-                  ],
-
-                  0
-
-                )
-
-                const temp1 = {
-
-                  [hit.key]: temp,
-
-                  ...[
-
-                    "deviation",
-
-                   "deviation_dow",
-
-                    "ratio",
-
-                    "average",
-
-                    "dow_average",
-
-                    "ratio_average"
-
-                  ].reduce(function(acc, cur) {
-
-                    acc[hit.key + "_" + cur] = _.get(
-
-                      hit,
-
-                      [
-                        "aggregations",
-                      "asMap",
-                        "agg_list",
-                         "aggregations",
-
-                      "asMap",
-                       "aggregator_key_list",
-                        "buckets",
-                        "0",
-                         "aggregations",
-
-                      "asMap",
-                        cur,
-                         "value"],
-
-                      undefined
-
-                    );
-
-                    return acc;
-
-                  }, {})
-
-                };
-                return temp1
-
-              })[0]
-
-            };
-
-            return tmp
-
-          })
-
-        : buckets.asMap.basic_rule_values.hits.hits.map(hit => hit.source),
-
-      args: buckets.asMap.tophit.hits.hits.map(hit => hit.source.sinkArgs)
-
-    }
-
-
-  return profilingChartOption(req)
-
-};
 
 getContributorsJson = (req) => {
   var constributorJson = {
@@ -1564,77 +1431,77 @@ getContributorsJson = (req) => {
 
     },
     chart: {
-        type: 'bar',
-        width: 1000
+      type: 'bar',
+      width: 1000
     },
     colors: CHART_COLORS,
     title: {
-        text: 'Title of the Chart'
+      text: 'Title of the Chart'
     },
     xAxis: {
-        categories: [],
-        labels: {
-          rotation:0
-        },
-        title: {
-          text: 'X axis'
+      categories: [],
+      labels: {
+        rotation: 0
+      },
+      title: {
+        text: 'X axis'
       }
     },
     yAxis: {
-        min: 0,
-        title: {
-            text: 'Y axis'
-        }
+      min: 0,
+      title: {
+        text: 'Y axis'
+      }
     },
     legend: {
-        reversed: true
+      reversed: true
     },
     plotOptions: {
-        series: {
-            stacking: 'normal',
-            color:'#e20074',
-            dataLabels: {
-              enabled: true,
-              color: 'black',
-              style: {fontWeight: 'bolder'},
-              
-            format:'{point.label}',
-              inside: false,
-              crop:false,
-              overflow : 'allow'
-          }
-                    
+      series: {
+        stacking: 'normal',
+        color: '#e20074',
+        dataLabels: {
+          enabled: true,
+          color: 'black',
+          style: { fontWeight: 'bolder' },
+
+          format: '{point.label}',
+          inside: false,
+          crop: false,
+          overflow: 'allow'
         }
+
+      }
     },
     series: [{
     }]
-}
+  }
 
-value = req.body.data;
-constributorJson.xAxis.categories=value.map(i => {
+  value = req.body.data;
+  constributorJson.xAxis.categories = value.map(i => {
 
-  return i[req.body.metadata.xtitle];
-});
+    return i[req.body.metadata.xtitle];
+  });
 
-stacks = req.body.metadata.stacks
-constributorJson.series=stacks.map(i => {
+  stacks = req.body.metadata.stacks
+  constributorJson.series = stacks.map(i => {
 
-  return {
-    name:i,
-    data: value.map(j => {
-      return {
-        y:j[i],
-        label:j[req.body.metadata.xbarLabelColumn]
-      };
-    })
+    return {
+      name: i,
+      data: value.map(j => {
+        return {
+          y: j[i],
+          label: j[req.body.metadata.xbarLabelColumn]
+        };
+      })
 
-  };
-});
-constributorJson.yAxis.title.text=req.body.metadata.ytitle
-constributorJson.xAxis.title.text=req.body.metadata.xtitle
-constributorJson.title.text=req.body.metadata.chartTitle
+    };
+  });
+  constributorJson.yAxis.title.text = req.body.metadata.ytitle
+  constributorJson.xAxis.title.text = req.body.metadata.xtitle
+  constributorJson.title.text = req.body.metadata.chartTitle
 
-return constributorJson;
+  return constributorJson;
 
 };
 
