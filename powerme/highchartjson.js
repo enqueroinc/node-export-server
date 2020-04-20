@@ -30,88 +30,110 @@ module.exports = {
     res.send(resultJson)
   },
 
-  getProfilingJson: function (req, res) {
-    var resultJson = profilingChartOption(req.body);
+  getProfilingJson : function(req,res){
+
+    var resultJson  = profilingChartOption(req.body);
     res.send(resultJson)
   },
 
-  getDistinctnessJson: function (req, res) {
-    var resultJson = getDistinctnessJson(req.body)
+  getAccuracyJson : function(req,res){
+
+    var resultJson  = accuracyChartOption(req.body);
+    res.send(resultJson)
+  },
+  getCompletenessJson : function(req,res){
+
+    var resultJson  = completenessChartOption(req.body);
+    res.send(resultJson)
+  },
+  getValidityJson : function(req,res){
+
+    var resultJson  = validityChartOption(req.body);
+    res.send(resultJson)
+  },
+
+
+  getDistinctnessJson : function(req,res){
+    var resultJson = distinctnessChartOption(req.body)
     res.send(resultJson)
   }
 }
-var anomaly = {};
-var timeFormat = "YYYY-MM-DD"
 
-getDistinctnessJson = (data) => {
+// completeness, validity, accuracy start
 
-  const buckets = data.metric.aggregations.asMap;
-  var aggregatorKey = data.aggValue;
-  var esResponse = [
-    {
-      name: _.get(buckets, ["tophit", "hits", "hits", "0", "source", "name"], "NA"),
-      hits: !isNullOrUndefined(aggregatorKey)
-        ? buckets.agg_rule_values.buckets.map(hits => {
-          return {
-            tmst: hits.key,
-            value: hits.aggregations.asMap.metric_agg.aggregations.asMap.rule_names.buckets
-              .map(hit => {
-                return {
-                  [hit.key]: _.get(
-                    hit,
-                    [
-                      "aggregations",
-                      "asMap",
-                      "agg_list",
-                      "aggregations",
-                      "asMap",
-                      "aggregator_key_list",
-                      "buckets",
-                      "0",
+accuracyChartOption = (response) => {
+  response = response.metric;
 
-                      "buckets",
-                      "0",
-                      "key"
-                    ],
-                    0
-                  ),
-                  ...["total", "distinct"].reduce(function (acc, cur) {
-                    acc[hit.key + "_" + cur] = _.get(
-                      hit,
-                      ["aggregations",
-                        "asMap", "agg_list", "aggregations",
-                        "asMap", "aggregator_key_list", "buckets", "0", "aggregations",
-                        "asMap", cur, "value"],
-                      undefined
-                    );
-                    return acc;
-                  }, {})
-                };
-              })
-              .reduce((result, current) => {
-                return Object.assign(result, removeNullValues(current));
-              }, {})
-          };
-        })
-        : buckets.basic_rule_values.hits.hits.map(hit => hit.source),
-      args: buckets.tophit.hits.hits.map(hit => hit.source.sinkArgs)
-    }
-  ];
-  return distinctnessChartOption(esResponse[0]);
+  const metric ={
+
+    hits: response,
+
+    name: _.get(response, ["0", "sinkArgs", "jobName"], "NA"),
+
+    args: response.map(i => i.sinkArgs)
+
+  };
+
+  const chart = getChartOptions("Missed Count", "Matched & Total Count");
+  formatter(chart, metric);
+  chart.series.push({
+    dataGrouping: {
+      enabled: false
+    },
+    type: "column",
+    name: "TOTAL",
+    yAxis: 1,
+    data: metric.hits.map(hit => {
+      return [hit.tmst, +hit.value.total || +hit.value.src_total_count || 0];
+    }),
+    color: CHART_COLORS[0]
+  });
+  chart.series.push({
+    type: "spline",
+    name: "MATCHED",
+    yAxis: 1,
+    data: metric.hits.map(hit => {
+      return [hit.tmst, +hit.value.matched || 0];
+    }),
+    color: CHART_COLORS[1]
+  });
+  chart.series.push({
+    type: "spline",
+    name: "MISS",
+    lineWidth: 3,
+    yAxis: 0,
+    data: metric.hits.map(hit => {
+      return {
+        x: hit.tmst,
+        y: +hit.value.miss || 0,
+        ...hit
+      };
+    }),
+    color: CHART_COLORS[2]
+  });
+  return chart
 };
 
-distinctnessChartOption = (metric) => {
-  const chart = getChartOptions("Duplicate Count", "Distinct & Total Count");
-  formatter(chart, metric);
 
-  if (metric.args && metric.args.length !== 0) {
-    aggregateBy =
-      metric.args[0].aggregatorAlias && metric.args[0].aggregatorAlias.trim().length > 0
-        ? metric.args[0].aggregatorAlias.trim()
-        : metric.args[0].aggregateBy;
-  }
+
+validityChartOption = (response) => {
+  response = response.metric;
+
+  const metric ={
+
+    hits: response,
+
+    name: _.get(response, ["0", "sinkArgs", "jobName"], "NA"),
+
+    args: response.map(i => i.sinkArgs)
+
+  };
+
+  const chart  = getChartOptions("Invalid Count", "Valid & Total Count");
+  formatter(chart, metric);
+  // console.log(" DD  "+JSON.stringify(metric));
   if (metric.hits.length) {
-    const val = processRequest(metric.hits[0].value, "distinctness");
+    const val = processRequest(metric.hits[0].value, "validity");
     val.forEach(i => {
       const name = getTitle(i);
       chart.series.push({
@@ -124,9 +146,326 @@ distinctnessChartOption = (metric) => {
         data: metric.hits.map(hit => {
           return {
             x: hit.tmst,
-            y: hit.value[i + "_dup"].total
-              ? hit.value[i + "_dup"].total
-              : hit.value[i + "_dup_total"]
+            y: +hit.value[i + "_total_count"]
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} valid`,
+        yAxis: 1,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: +hit.value[i + "_valid_count"]
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} invalid`,
+        lineWidth: 3,
+        yAxis: 0,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: +hit.value[i + "_invalid_count"]
+          };
+        })
+      });
+
+      chart.series.push({
+        type: "spline",
+        name: `${name} valid percentage`,
+        lineWidth: 3,
+        yAxis: 0,
+        showInLegend: false,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: hit.value[i + "_valid_percentage"]
+               ? parseFloat(hit.value[i + "_valid_percentage"])
+               : 0
+          };
+        }),
+
+        zIndex: 15
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} invalid percentage`,
+        lineWidth: 3,
+        yAxis: 0,
+        showInLegend: false,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: hit.value[i + "_invalid_percentage"]
+               ? parseFloat(hit.value[i + "_invalid_percentage"])
+               : 0
+          };
+        }),
+        zIndex: 15
+      });
+    });
+  }
+  return chart
+};
+
+
+completenessChartOption = (response) => {
+  response = response.metric;
+
+  const metric ={
+
+    hits: response,
+
+    name: _.get(response, ["0", "sinkArgs", "jobName"], "NA"),
+
+    args: response.map(i => i.sinkArgs)
+
+  };
+  const chart = getChartOptions("Incomplete Count", "Complete & Total Count");
+  formatter(chart, metric);
+  if (metric.hits.length) {
+    const val = processRequest(metric.hits[0].value, "completeness");
+
+    console.log("Val  ::"+val);
+    val.forEach(i => {
+      const name = getTitle(i);
+      chart.series.push({
+        dataGrouping: {
+          enabled: false
+        },
+        type: "column",
+        name: `${name} total`,
+        yAxis: 1,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: +hit.value[i + "_null_check_total_count"]
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} complete_count`,
+        yAxis: 1,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: +hit.value[i + "_null_check_complete_count"]
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} incomplete_count`,
+        yAxis: 0,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: +hit.value[i + "_null_check_incomplete_count"]
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} complete percentage`,
+        yAxis: 1,
+        showInLegend: false,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: hit.value[i + "_null_check_complete_percentage"]
+               ? parseFloat(hit.value[i + "_null_check_complete_percentage"])
+               : 0
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} incomplete percentage`,
+        yAxis: 1,
+        showInLegend: false,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: hit.value[i + "_null_check_incomplete_percentage"]
+               ? parseFloat(hit.value[i + "_null_check_incomplete_percentage"])
+               : 0
+          };
+        })
+      });
+    });
+  }
+  return chart
+};
+
+// completeness, validity, accuracy end
+
+// profiling new fnc
+
+profilingChartOption = (response) => {
+  response = response.metric;
+
+  const metric ={
+
+    hits: response,
+
+    name: _.get(response, ["0", "sinkArgs", "jobName"], "NA"),
+
+    args: response.map(i => i.sinkArgs)
+
+  };
+
+  const chart = getChartOptions("Value", "Deviation & Ratio");
+
+  chart.rangeSelector.buttons.splice(1, 0, {
+
+    type: "day",
+
+    count: 2,
+
+    text: "2D"
+
+  });
+
+  chart.rangeSelector.selected = 7;
+
+  if (metric.hits.length >= 2) {
+
+    let firstHit = moment(metric.hits[0].tmst);
+
+    let secondHit = moment(metric.hits[1].tmst);
+
+    let duration = moment.duration(secondHit.diff(firstHit));
+
+    let hours = duration.asHours();
+
+    if (hours <= 24) {
+
+      chart.rangeSelector.selected = 1;
+
+    }
+
+  }
+
+  formatter(chart, metric);
+
+  const seriesMap = {};
+
+  metric.hits.forEach(hit => {
+
+    if (hit.value) {
+
+      const graphMetrics = Object.keys(hit.value)
+
+                                 .filter(key => !isNullOrUndefined(hit.value[key]))
+
+                                 .sort();
+
+      graphMetrics.forEach(key => {
+
+        const isDeviationRule = /(ratio|deviation|deviation_dow)$/.test(key);
+
+        if (!seriesMap.hasOwnProperty(key)) {
+
+          seriesMap[key] = {
+
+            dataGrouping: {
+
+              enabled: false
+
+            },
+
+            type: isDeviationRule ? "spline" : "column",
+
+            yAxis: isDeviationRule ? 1 : 0,
+
+            name: key,
+
+            data: []
+
+          };
+
+          if (isDeviationRule) {
+
+            seriesMap[key]["zIndex"] = 10;
+
+            seriesMap[key]["tooltip"] = {
+
+              valueSuffix: " %"
+
+            };
+
+          }
+
+        }
+
+        if (hit.value.hasOwnProperty(key)) {
+
+          seriesMap[key].data.push({
+
+            x: hit.tmst,
+
+            y: +parseFloat(hit.value[key]).toFixed(2)
+
+          });
+
+        }
+
+      });
+
+    }
+
+  });
+
+  chart.series = Object.keys(seriesMap)
+
+                       .filter(key => seriesMap[key].data.length)
+
+                       .map(key => seriesMap[key]);
+
+
+
+  return chart;
+
+};
+// end here
+// Distinctness chart start
+
+distinctnessChartOption = (response) => {
+  response = response.metric;
+
+  const metric ={
+
+    hits: response,
+
+    name: _.get(response, ["0", "sinkArgs", "jobName"], "NA"),
+
+    args: response.map(i => i.sinkArgs)
+
+  };
+  const chart = getChartOptions("Duplicate Count", "Distinct & Total Count");
+  formatter(chart, metric);
+  console.log("Value : "+JSON.stringify(metric.hits[0].value));
+  if (metric.hits.length) {
+    const val = processRequest(metric.hits[0].value, "distinctness");
+    console.log("Val :: "+val);
+    val.forEach(i => {
+      const name = getTitle(i);
+      chart.series.push({
+        dataGrouping: {
+          enabled: false
+        },
+        type: "column",
+        name: `${name} total`,
+        yAxis: 1,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y:  +hit.value[i + "_dup_total"]
           };
         })
       });
@@ -137,9 +476,7 @@ distinctnessChartOption = (metric) => {
         data: metric.hits.map(hit => {
           return {
             x: hit.tmst,
-            y: hit.value[i + "_dup"].distinct
-              ? hit.value[i + "_dup"].distinct
-              : hit.value[i + "_dup_distinct"]
+            y:  +hit.value[i + "_dup_distinct"]
           };
         })
       });
@@ -151,12 +488,36 @@ distinctnessChartOption = (metric) => {
           return {
             x: hit.tmst,
             y:
-              (hit.value[i + "_dup"].total
-                ? hit.value[i + "_dup"].total
-                : hit.value[i + "_dup_total"]) -
-              (hit.value[i + "_dup"].distinct
-                ? hit.value[i + "_dup"].distinct
-                : hit.value[i + "_dup_distinct"])
+              ( hit.value[i + "_dup_total"]) -
+              ( hit.value[i + "_dup_distinct"])
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} distinct percentage`,
+        yAxis: 1,
+        showInLegend: false,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: hit.value[i + "_dup_distinct_percentage"]
+               ? parseFloat(hit.value[i + "_dup_distinct_percentage"])
+               : 0
+          };
+        })
+      });
+      chart.series.push({
+        type: "spline",
+        name: `${name} duplicate percentage`,
+        yAxis: 1,
+        showInLegend: false,
+        data: metric.hits.map(hit => {
+          return {
+            x: hit.tmst,
+            y: hit.value[i + "_dup_duplicate_percentage"]
+               ? parseFloat(hit.value[i + "_dup_duplicate_percentage"]).toFixed(2)
+               : 0
           };
         })
       });
@@ -164,7 +525,8 @@ distinctnessChartOption = (metric) => {
   }
   return chart;
 }
-getTitle = function (name) {
+
+getTitle = function(name) {
   const temp = name.split("__");
   if (temp.length > 1) {
     temp[1] = temp[1].replace(/_/g, " ");
@@ -174,32 +536,32 @@ getTitle = function (name) {
   }
 };
 
-processRequest = function (item, type) {
+processRequest = function(item, type) {
   switch (type) {
     case "validity": {
       return Object.keys(item)
-        .filter(i => {
-          return i.endsWith("_total_count");
-        })
-        .map(i => i.replace("_total_count", ""));
+                   .filter(i => {
+                     return i.endsWith("_total_count");
+                   })
+                   .map(i => i.replace("_total_count", ""));
     }
     case "completeness": {
       return Object.keys(item)
-        .filter(i => {
-          return i.endsWith("_null_check");
-        })
-        .map(i => i.replace("_null_check", ""));
+                   .filter(i => {
+                     return i.endsWith("_null_check_total_count");
+                   })
+                   .map(i => i.replace("_null_check_total_count", ""));
     }
     case "distinctness": {
       return Object.keys(item)
-        .filter(i => {
-          return i.endsWith("_dup");
-        })
-        .map(i => i.replace("_dup", ""));
+                   .filter(i => {
+                     return i.endsWith("_dup_total");
+                   })
+                   .map(i => i.replace("_dup_total", ""));
     }
   }
 }
-removeNullValues = function (current) {
+removeNullValues = function(current) {
   for (let val in current) {
     if (current[val] == null) {
       delete current[val];
@@ -208,10 +570,14 @@ removeNullValues = function (current) {
   return current;
 }
 
+// Distinceness end
+var anomaly = {};
+var timeFormat = "YYYY-MM-DD"
+
 getDashboardJson = (req) => {
   value = req.body.data
   anomaly = req.body.anomaly
-  timeFormat = anomaly.details.dateFormat ? anomaly.details.dateFormat : timeFormat;
+  timeFormat = anomaly.details.dateFormat ?  anomaly.details.dateFormat : timeFormat;
   console.log("Time format :: ", timeFormat)
 
   seriesOptions = [];
@@ -546,11 +912,11 @@ drawAnomalygraph = val => {
 
       (checkForAnomaly(anomaly, anomaly.level || 0)
 
-        ?
-        '<div style="color:{series.color};padding:0">Confidence Score: <b>{point.score}</b></div>'
+       ?
+       '<div style="color:{series.color};padding:0">Confidence Score: <b>{point.score}</b></div>'
 
-        :
-        ""),
+       :
+       ""),
 
     footerFormat: "",
 
@@ -594,7 +960,7 @@ drawAnomalygraph = val => {
 
   return drawCharts({
     desc: anomaly.details.medianColumn,
-    timeFormat: timeFormat,
+    timeFormat : timeFormat,
     yAxis: [{
       axis: 0
     }]
@@ -919,7 +1285,7 @@ timelineColumnChart = (element) => {
 
   };
 
-  if (element.timeFormat && element.timeFormat === 'YYYY-MM-DD HH:mm') {
+  if(element.timeFormat && element.timeFormat === 'YYYY-MM-DD HH:mm') {
     options.rangeSelector.buttons.splice(1, 0, {
 
       type: "day",
@@ -1198,134 +1564,9 @@ getChartOptions = (y1AxisName, y2AxisName) => {
 
 };
 
-profilingChartOption = (response) => {
-  response = response.metric;
 
-  const metric = {
 
-    hits: response,
-
-    name: _.get(response, ["0", "sinkArgs", "jobName"], "NA"),
-
-    args: response.map(i => i.sinkArgs)
-
-  };
-
-  const chart = getChartOptions("Value", "Deviation & Ratio");
-
-  chart.rangeSelector.buttons.splice(1, 0, {
-
-    type: "day",
-
-    count: 2,
-
-    text: "2D"
-
-  });
-
-  chart.rangeSelector.selected = 7;
-
-  if (metric.hits.length >= 2) {
-
-    let firstHit = moment(metric.hits[0].tmst);
-
-    let secondHit = moment(metric.hits[1].tmst);
-
-    let duration = moment.duration(secondHit.diff(firstHit));
-
-    let hours = duration.asHours();
-
-    if (hours <= 24) {
-
-      chart.rangeSelector.selected = 1;
-
-    }
-
-  }
-
-  formatter(chart, metric);
-
-  const seriesMap = {};
-
-  metric.hits.forEach(hit => {
-
-    if (hit.value) {
-
-      const graphMetrics = Object.keys(hit.value)
-
-        .filter(key => !isNullOrUndefined(hit.value[key]))
-
-        .sort();
-
-      graphMetrics.forEach(key => {
-
-        const isDeviationRule = /(ratio|deviation|deviation_dow)$/.test(key);
-
-        if (!seriesMap.hasOwnProperty(key)) {
-
-          seriesMap[key] = {
-
-            dataGrouping: {
-
-              enabled: false
-
-            },
-
-            type: isDeviationRule ? "spline" : "column",
-
-            yAxis: isDeviationRule ? 1 : 0,
-
-            name: key,
-
-            data: []
-
-          };
-
-          if (isDeviationRule) {
-
-            seriesMap[key]["zIndex"] = 10;
-
-            seriesMap[key]["tooltip"] = {
-
-              valueSuffix: " %"
-
-            };
-
-          }
-
-        }
-
-        if (hit.value.hasOwnProperty(key)) {
-
-          seriesMap[key].data.push({
-
-            x: hit.tmst,
-
-            y: +parseFloat(hit.value[key]).toFixed(2)
-
-          });
-
-        }
-
-      });
-
-    }
-
-  });
-
-  chart.series = Object.keys(seriesMap)
-
-    .filter(key => seriesMap[key].data.length)
-
-    .map(key => seriesMap[key]);
-
-
-
-  return chart;
-
-};
-
-getSortBy = (agg) => {
+getSortBy = (agg)=> {
 
   const keys = Object.keys(agg);
 
@@ -1419,9 +1660,17 @@ formatter = (chart, metric) => {
 
 }
 
-isNullOrUndefined = (val) => {
+isNullOrUndefined = (val) =>{
   return (val === undefined || val === null)
 }
+
+getProfilingJson = (req) =>{
+
+  var res = profilingResponse(req.metric,req.aggValue);
+  return res;
+}
+
+
 
 getContributorsJson = (req) => {
   var constributorJson = {
@@ -1441,7 +1690,7 @@ getContributorsJson = (req) => {
     xAxis: {
       categories: [],
       labels: {
-        rotation: 0
+        rotation:0
       },
       title: {
         text: 'X axis'
@@ -1459,16 +1708,16 @@ getContributorsJson = (req) => {
     plotOptions: {
       series: {
         stacking: 'normal',
-        color: '#e20074',
+        color:'#e20074',
         dataLabels: {
           enabled: true,
           color: 'black',
-          style: { fontWeight: 'bolder' },
+          style: {fontWeight: 'bolder'},
 
-          format: '{point.label}',
+          format:'{point.label}',
           inside: false,
-          crop: false,
-          overflow: 'allow'
+          crop:false,
+          overflow : 'allow'
         }
 
       }
@@ -1478,30 +1727,29 @@ getContributorsJson = (req) => {
   }
 
   value = req.body.data;
-  constributorJson.xAxis.categories = value.map(i => {
+  constributorJson.xAxis.categories=value.map(i => {
 
     return i[req.body.metadata.xtitle];
   });
 
   stacks = req.body.metadata.stacks
-  constributorJson.series = stacks.map(i => {
+  constributorJson.series=stacks.map(i => {
 
     return {
-      name: i,
+      name:i,
       data: value.map(j => {
         return {
-          y: j[i],
-          label: j[req.body.metadata.xbarLabelColumn]
+          y:j[i],
+          label:j[req.body.metadata.xbarLabelColumn]
         };
       })
 
     };
   });
-  constributorJson.yAxis.title.text = req.body.metadata.ytitle
-  constributorJson.xAxis.title.text = req.body.metadata.xtitle
-  constributorJson.title.text = req.body.metadata.chartTitle
+  constributorJson.yAxis.title.text=req.body.metadata.ytitle
+  constributorJson.xAxis.title.text=req.body.metadata.xtitle
+  constributorJson.title.text=req.body.metadata.chartTitle
 
   return constributorJson;
 
 };
-
