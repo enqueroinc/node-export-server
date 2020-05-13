@@ -56,7 +56,13 @@ module.exports = {
   getDistinctnessJson : function(req,res){
     var resultJson = distinctnessChartOption(req.body)
     res.send(resultJson)
+  },
+
+  getOffenderJson : function(req, res){
+    resultJson = getOffenderJson(req.body);
+    res.send(resultJson)
   }
+
 }
 
 // completeness, validity, accuracy start
@@ -525,6 +531,84 @@ distinctnessChartOption = (response) => {
   }
   return chart;
 }
+
+getOffenderJson = (req)=>{
+
+  var details = req.matadata;
+  var chart = {
+    credits: {
+      enabled: false
+    },
+    title: {
+      text: details.title
+    },
+    chart: {
+      type: "bar"
+    },
+    colors: CHART_COLORS,
+    xAxis: {
+      categories: [],
+      labels: {
+        rotation: 0
+      },
+      title: {
+        text: details.label
+      }
+    },
+    yAxis: {
+      title: {
+        text: details.metric
+      }
+    },
+    legend: {
+      reversed: true
+    },
+
+    series: [{}]
+  };
+
+  const formatter = (num, digits) => {
+    let si = [
+      { value: 1, symbol: "" },
+      { value: 1e3, symbol: "K" },
+      { value: 1e6, symbol: "M" },
+      { value: 1e9, symbol: "B" },
+      { value: 1e12, symbol: "T" },
+      { value: 1e15, symbol: "Qa" },
+      { value: 1e18, symbol: "Qi" }
+    ];
+    let rx = /\.0+$|(\.[0-9]*[1-9])0+$/;
+    let i;
+    for (i = si.length - 1; i > 0; i--) {
+      if (num >= si[i].value) {
+        break;
+      }
+    }
+    return (num / si[i].value).toFixed(digits).replace(rx, "$1") + si[i].symbol;
+  };
+
+  const data = {
+    data: req.metric.map(i => {
+
+      return {
+        y: parseFloat( i.metric > 1 ? i.metric.toFixed(2) : i.metric.toFixed(5)),
+        label: formatter(i.metric, parseInt(i.metric) > 1 ? 2 : 5)
+      };
+    }),
+    name: details.impact_calc_criteria
+  };
+
+
+
+  chart.xAxis.categories = req.metric.map(i => i.name);
+  chart.series = [data];
+
+  return chart;
+
+
+
+}
+
 
 getTitle = function(name) {
   const temp = name.split("__");
